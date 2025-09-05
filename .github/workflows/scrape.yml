@@ -1,0 +1,37 @@
+name: JobScrape
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Daily at 22:00 UTC (5 PM EST)
+    - cron: '0 22 * * *'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run scraper
+        run: |
+          python run_all.py
+
+      - name: Upload Excel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: all_jobs
+          path: Jobs/all_jobs.xlsx
+          if-no-files-found: warn
+          retention-days: 14
