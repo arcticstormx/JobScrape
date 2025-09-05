@@ -11,27 +11,31 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CV_REPO: ${{ secrets.CV_REPO }}
+      CV_REPO_TOKEN: ${{ secrets.CV_REPO_TOKEN }}
+      CV_FILE_PATH: ${{ secrets.CV_FILE_PATH }}
+      CV_REPO_REF: ${{ secrets.CV_REPO_REF }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Checkout private CV repo (optional)
-        if: ${{ secrets.CV_REPO != '' && secrets.CV_REPO_TOKEN != '' }}
+        if: ${{ env.CV_REPO != '' && env.CV_REPO_TOKEN != '' }}
         uses: actions/checkout@v4
         with:
-          repository: ${{ secrets.CV_REPO }}
-          token: ${{ secrets.CV_REPO_TOKEN }}
+          repository: ${{ env.CV_REPO }}
+          token: ${{ env.CV_REPO_TOKEN }}
           path: _cv_repo
           # Optionally set a specific ref/branch via CV_REPO_REF secret
-          # ref: ${{ secrets.CV_REPO_REF }}
+          # ref: ${{ env.CV_REPO_REF }}
 
       - name: Copy resume from CV repo (optional)
-        if: ${{ secrets.CV_REPO != '' && secrets.CV_REPO_TOKEN != '' }}
+        if: ${{ env.CV_REPO != '' && env.CV_REPO_TOKEN != '' }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p personal
-          CV_FILE_PATH="${{ secrets.CV_FILE_PATH }}"
+          CV_FILE_PATH="${{ env.CV_FILE_PATH }}"
           if [ -z "${CV_FILE_PATH}" ]; then
             CV_FILE_PATH="resume.md"
           fi
