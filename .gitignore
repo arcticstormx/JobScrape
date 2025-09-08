@@ -1,2 +1,28 @@
-# Ignore everything in the "output" folder
+# Personal files (resume etc.)
 /personal/
+
+# Python build/virtualenv and caches
+.venv/
+venv/
+env/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+
+# Local/CI working dirs
+_cv_repo/
+
+# Generated artifacts
+Jobs/*.xlsx
+Jobs/*.csv

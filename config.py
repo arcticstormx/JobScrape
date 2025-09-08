@@ -22,8 +22,8 @@ CITIES = {
 }
 
 # Common scrape parameters
-RESULTS_WANTED = 50
-HOURS_OLD = 72
+RESULTS_WANTED = 15
+HOURS_OLD = 24
 JOB_TYPE = "fulltime"  # or None
 COUNTRY_INDEED = "USA"
 
