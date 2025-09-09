@@ -323,9 +323,9 @@ def main():
     instructions = load_rank_instructions()
     resume_query_text = build_resume_query(resume_text, instructions)
 
-    # Load jobs workbook
-    xls = pd.ExcelFile(jobs_excel)
-    sheet_order = xls.sheet_names
+    # Load jobs workbook fully into memory to allow safe deletion later
+    sheets_map: Dict[str, pd.DataFrame] = pd.read_excel(jobs_excel, sheet_name=None)
+    sheet_order = list(sheets_map.keys())
     if not sheet_order:
         with pd.ExcelWriter(out_excel) as writer:
             pd.DataFrame().to_excel(writer, sheet_name="Empty", index=False)
@@ -364,11 +364,9 @@ def main():
 
     # Build an All dataframe from input (prefer the input 'All' if present)
     if "All" in sheet_order:
-        input_all_df = pd.read_excel(xls, sheet_name="All")
+        input_all_df = sheets_map["All"]
     else:
-        input_all_df = pd.concat(
-            [pd.read_excel(xls, sheet_name=s) for s in sheet_order], ignore_index=True
-        )
+        input_all_df = pd.concat([sheets_map[s] for s in sheet_order], ignore_index=True)
 
     # Rank each sheet independently and write to output with same sheet names
     methods_used: Dict[str, str] = {}
@@ -385,7 +383,7 @@ def main():
             else sheet_order
         )
         for name in ordered:
-            df_sheet = pd.read_excel(xls, sheet_name=name)
+            df_sheet = sheets_map[name]
             ranked_df, method = rank_df(df_sheet)
             methods_used[name] = method
             ranked_df.to_excel(writer, sheet_name=name, index=False)
@@ -396,6 +394,15 @@ def main():
         f"Ranked workbook '{jobs_excel.name}' with methods per sheet [{method_summary}] (no AI). Resume source: {source}.\n"
         f"Wrote {out_excel}"
     )
+
+    # Remove the unranked source workbook so only the ranked file remains
+    keep_unranked = os.getenv("KEEP_UNRANKED", "").lower() in {"1", "true", "yes", "y"}
+    try:
+        if not keep_unranked and jobs_excel.exists() and jobs_excel.resolve() != out_excel.resolve():
+            jobs_excel.unlink(missing_ok=True)
+            print(f"Removed source workbook: {jobs_excel}")
+    except Exception as e:
+        print(f"Warning: could not remove source workbook {jobs_excel}: {e}")
 
 
 if __name__ == "__main__":
