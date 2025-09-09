@@ -158,11 +158,22 @@ def score_job_posting(title: str, company: str, location: str, description: str)
         score += 1
         breakdown.append("+1 Preferred Location")
 
+    # Jacksonville +2, Miami +1
+    jacksonville_hit = "jacksonville" in location_lc
+    miami_hit = "miami" in location_lc
+    if jacksonville_hit:
+        score += 2
+        breakdown.append("+2 Jacksonville Bonus")
+    if miami_hit:
+        score += 1
+        breakdown.append("+1 Miami Bonus")
+
     if any(keyword in title_lc for keyword in SENIORITY_KEYWORDS):
         score -= 5
         breakdown.append("-5 Seniority Penalty")
 
-    if any(loc in location_lc for loc in FLORIDA_LOCATIONS):
+    # Apply Florida penalty except when Jacksonville/Miami bonus applied
+    if any(loc in location_lc for loc in FLORIDA_LOCATIONS) and not (jacksonville_hit or miami_hit):
         score -= 1
         breakdown.append("-1 Florida Penalty")
 

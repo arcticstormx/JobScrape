@@ -26,6 +26,11 @@ CITIES = {
     "Denver": "Denver, CO",
     "Portland": "Portland, OR",
     "Seattle": "Seattle, WA",
+    # Florida cities (requested)
+    "Jacksonville": "Jacksonville, FL",
+    "Orlando": "Orlando, FL",
+    "Tampa": "Tampa, FL",
+    "Miami": "Miami, FL",
 }
 
 # Common scrape parameters
@@ -59,6 +64,7 @@ EXCLUDE_TITLE_SUBSTRINGS = {
     "director",
     "principal",
     "lead",
+    "sr"
 }
 
 # Optional column slimming: set to a list to keep only these columns, or None to keep all
