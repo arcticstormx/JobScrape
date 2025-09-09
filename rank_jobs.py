@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 
 import pandas as pd
+from openpyxl.styles import PatternFill
 
 
 def read_text_file(path: Path) -> str:
@@ -200,6 +201,26 @@ def build_ranking_ai_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
     out.insert(2, "ai_breakdown", list(breakdowns))
     out = out.sort_values(by=["ai_score"], ascending=False)
     return out
+
+
+def _highlight_top_picks(writer, sheet_name: str, df: pd.DataFrame) -> None:
+    """Highlight rows where ai_top_pick is True in light green.
+
+    Applies styling directly to the openpyxl worksheet via the pandas ExcelWriter.
+    """
+    if "ai_top_pick" not in df.columns:
+        return
+    try:
+        ws = writer.sheets[sheet_name]
+    except Exception:
+        return
+    fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+    ncols = len(df.columns)
+    # Iterate DataFrame rows; header is row 1, data starts at row 2
+    for i, is_top in enumerate(df["ai_top_pick"].tolist(), start=2):
+        if bool(is_top):
+            for col_idx in range(1, ncols + 1):
+                ws.cell(row=i, column=col_idx).fill = fill
 
 def get_openai_client():
     return None
