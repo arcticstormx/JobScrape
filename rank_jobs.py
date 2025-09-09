@@ -53,7 +53,8 @@ def get_openai_client():
 
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("Missing OPENAI_API_KEY env var for embeddings.")
+        # No key present; return None to allow local fallback.
+        return None
     base_url = os.getenv("OPENAI_BASE_URL")  # optional, supports Azure/other proxies
     client = OpenAI(api_key=api_key, base_url=base_url)
     return client
@@ -63,6 +64,67 @@ def embed_texts(client, texts: List[str], model: str) -> List[List[float]]:
     # OpenAI API supports batching multiple inputs in one call
     resp = client.embeddings.create(model=model, input=texts)
     return [d.embedding for d in resp.data]
+
+
+def rank_with_openai(resume_text: str, texts: List[str]) -> Tuple[List[float], str]:
+    """Try to rank using OpenAI embeddings. Returns (scores, method_label).
+
+    Raises an exception if embeddings cannot be obtained (e.g., quota).
+    """
+    client = get_openai_client()
+    if client is None:
+        raise RuntimeError("OPENAI_API_KEY not set")
+    embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
+    [resume_vec] = embed_texts(client, [resume_text], embed_model)
+    job_vecs = embed_texts(client, texts, embed_model)
+
+    resume_arr = np.array(resume_vec, dtype=float)
+    scores = [cosine_sim(resume_arr, np.array(v, dtype=float)) for v in job_vecs]
+    return scores, f"openai:{embed_model}"
+
+
+def rank_with_local(resume_text: str, texts: List[str]) -> Tuple[List[float], str]:
+    """Rank using local text similarity without external APIs.
+
+    Tries scikit-learn TF-IDF if available; falls back to Jaccard set similarity.
+    Returns (scores, method_label).
+    """
+    # Attempt TF-IDF via scikit-learn if present
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
+        from sklearn.metrics.pairwise import cosine_similarity  # type: ignore
+
+        vectorizer = TfidfVectorizer(
+            lowercase=True,
+            stop_words="english",
+            max_features=50000,
+        )
+        corpus = [resume_text] + texts
+        X = vectorizer.fit_transform(corpus)
+        resume_vec = X[0]
+        job_vecs = X[1:]
+        sims = cosine_similarity(job_vecs, resume_vec)[:, 0]
+        return sims.tolist(), "local_tfidf"
+    except Exception:
+        pass
+
+    # Lightweight fallback: Jaccard similarity on token sets
+    def tokenize(s: str) -> set:
+        return set(
+            t for t in " ".join(s.lower().split()).split(" ") if t and t.isalpha()
+        )
+
+    resume_tokens = tokenize(resume_text)
+    scores: List[float] = []
+    for txt in texts:
+        jt = tokenize(txt)
+        if not resume_tokens and not jt:
+            scores.append(0.0)
+            continue
+        inter = len(resume_tokens & jt)
+        union = len(resume_tokens | jt)
+        scores.append(float(inter / union) if union else 0.0)
+    return scores, "local_jaccard"
 
 
 def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
@@ -129,16 +191,20 @@ def main():
 
     texts = [row_to_text(r) for _, r in df.iterrows()]
 
-    # OpenAI embeddings
-    client = get_openai_client()
-    embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-
-    # Embed resume once, jobs in batch
-    [resume_vec] = embed_texts(client, [resume_text], embed_model)
-    job_vecs = embed_texts(client, texts, embed_model)
-
-    resume_arr = np.array(resume_vec, dtype=float)
-    scores = [cosine_sim(resume_arr, np.array(v, dtype=float)) for v in job_vecs]
+    # Try OpenAI embeddings; fallback locally if quota/keys missing
+    method_used = ""
+    try:
+        scores, method_used = rank_with_openai(resume_text, texts)
+    except Exception as e:
+        # Detect insufficient quota or 429 errors to inform the user
+        msg = str(e).lower()
+        if "insufficient_quota" in msg or "429" in msg or "rate" in msg or "openai_api_key" in msg:
+            print(
+                "OpenAI embeddings unavailable (quota/key/rate). Falling back to local ranking..."
+            )
+        else:
+            print(f"OpenAI embedding failed: {e}. Falling back to local ranking...")
+        scores, method_used = rank_with_local(resume_text, texts)
 
     df_out = df.copy()
     df_out.insert(0, "similarity_score", scores)
@@ -151,11 +217,10 @@ def main():
         df.to_excel(writer, sheet_name=sheet_name, index=False)
 
     print(
-        f"Ranked {len(df_sorted)} jobs by similarity using {embed_model}. Resume source: {source}.\n"
+        f"Ranked {len(df_sorted)} jobs by similarity using {method_used}. Resume source: {source}.\n"
         f"Wrote {out_excel}"
     )
 
 
 if __name__ == "__main__":
     main()
-
