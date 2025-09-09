@@ -50,7 +50,16 @@ JOB_LEVEL_FILTER = {"entry level", "associate", "mid-senior level"}
 # Remove internships entirely by default
 EXCLUDE_JOB_TYPES = {"internship"}
 # Also drop titles containing these substrings (case-insensitive)
-EXCLUDE_TITLE_SUBSTRINGS = {"intern"}
+# Includes internships and seniority to remove them entirely
+EXCLUDE_TITLE_SUBSTRINGS = {
+    "intern",
+    "senior",
+    "vp",
+    "vice president",
+    "director",
+    "principal",
+    "lead",
+}
 
 # Optional column slimming: set to a list to keep only these columns, or None to keep all
 DESIRED_COLUMNS = [

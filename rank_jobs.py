@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 
@@ -185,6 +186,12 @@ def build_ranking_ai_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
     if all_df.empty:
         return all_df.copy()
 
+    # Remove postings that would incur a seniority penalty entirely
+    if "title" in all_df.columns:
+        title_lc = all_df["title"].astype(str).str.lower()
+        seniority_pat = "|".join(map(re.escape, SENIORITY_KEYWORDS))
+        all_df = all_df[~title_lc.str.contains(seniority_pat, na=False)]
+
     rows = []
     for _, r in all_df.iterrows():
         title = r.get("title", "")
@@ -350,6 +357,11 @@ def main():
     def rank_df(df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
         if df.empty:
             return df.copy(), "no_data"
+        # Remove postings that would incur a seniority penalty entirely
+        if "title" in df.columns:
+            title_lc = df["title"].astype(str).str.lower()
+            seniority_pat = "|".join(map(re.escape, SENIORITY_KEYWORDS))
+            df = df[~title_lc.str.contains(seniority_pat, na=False)]
         texts = [row_to_text(r) for _, r in df.iterrows()]
         method_used = ""
         try:
