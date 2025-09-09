@@ -3,7 +3,6 @@ import re
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict
 
-import numpy as np
 import pandas as pd
 
 
@@ -29,11 +28,8 @@ def read_pdf_text(path: Path) -> str:
 
 
 def load_resume_text(resume_path: Path) -> Tuple[str, str]:
-    """Return (source, text). Supports .pdf and text-like files (md, txt)."""
-    if resume_path.suffix.lower() == ".pdf":
-        return "pdf", read_pdf_text(resume_path)
-    else:
-        return resume_path.suffix.lower().lstrip("."), read_text_file(resume_path)
+    """Deprecated: resume usage removed."""
+    return "", ""
 
 
 def normalize_text(s: str) -> str:
@@ -45,35 +41,13 @@ def normalize_text(s: str) -> str:
 
 
 def load_rank_instructions() -> Optional[str]:
-    """Load private ranking instructions.
-
-    Looks for env var RANK_INSTRUCTIONS, then file at RANK_INSTRUCTIONS_PATH,
-    defaulting to personal/rank_instructions.md if present. Returns None if none found.
-    """
-    instr = os.getenv("RANK_INSTRUCTIONS")
-    if instr:
-        return normalize_text(instr)
-    path = os.getenv("RANK_INSTRUCTIONS_PATH")
-    cand = Path(path) if path else Path("personal/rank_instructions.md")
-    if cand.exists():
-        try:
-            return normalize_text(read_text_file(cand))
-        except Exception:
-            return None
+    """Deprecated: similarity ranking removed; instructions no longer used."""
     return None
 
 
 def build_resume_query(resume_text: str, instructions: Optional[str]) -> str:
-    """Combine instructions and resume into a single query string for embedding.
-
-    The instructions are private (e.g., in personal/rank_instructions.md) and are
-    simply prepended to influence similarity without being written to outputs.
-    """
-    if not instructions:
-        return resume_text
-    return normalize_text(
-        f"Ranking instructions: {instructions}\n\nCandidate resume: {resume_text}"
-    )
+    """Deprecated: similarity ranking removed."""
+    return ""
 
 
 # -------------------------
@@ -228,67 +202,23 @@ def build_ranking_ai_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 def get_openai_client():
-    # AI usage removed: keep placeholder to avoid import errors elsewhere if referenced.
     return None
 
 
 def embed_texts(client, texts: List[str], model: str) -> List[List[float]]:
-    raise RuntimeError("OpenAI embeddings disabled: AI usage removed from ranker.")
+    raise RuntimeError("Embeddings not supported: similarity ranking removed.")
 
 
 def rank_with_openai(resume_text: str, texts: List[str]) -> Tuple[List[float], str]:
-    raise RuntimeError("OpenAI ranking disabled: AI usage removed from ranker.")
+    raise RuntimeError("OpenAI disabled: similarity ranking removed.")
 
 
 def rank_with_local(resume_text: str, texts: List[str]) -> Tuple[List[float], str]:
-    """Rank using local text similarity without external APIs.
-
-    Tries scikit-learn TF-IDF if available; falls back to Jaccard set similarity.
-    Returns (scores, method_label).
-    """
-    # Attempt TF-IDF via scikit-learn if present
-    try:
-        from sklearn.feature_extraction.text import TfidfVectorizer  # type: ignore
-        from sklearn.metrics.pairwise import cosine_similarity  # type: ignore
-
-        vectorizer = TfidfVectorizer(
-            lowercase=True,
-            stop_words="english",
-            max_features=50000,
-        )
-        corpus = [resume_text] + texts
-        X = vectorizer.fit_transform(corpus)
-        resume_vec = X[0]
-        job_vecs = X[1:]
-        sims = cosine_similarity(job_vecs, resume_vec)[:, 0]
-        return sims.tolist(), "local_tfidf"
-    except Exception:
-        pass
-
-    # Lightweight fallback: Jaccard similarity on token sets
-    def tokenize(s: str) -> set:
-        return set(
-            t for t in " ".join(s.lower().split()).split(" ") if t and t.isalpha()
-        )
-
-    resume_tokens = tokenize(resume_text)
-    scores: List[float] = []
-    for txt in texts:
-        jt = tokenize(txt)
-        if not resume_tokens and not jt:
-            scores.append(0.0)
-            continue
-        inter = len(resume_tokens & jt)
-        union = len(resume_tokens | jt)
-        scores.append(float(inter / union) if union else 0.0)
-    return scores, "local_jaccard"
+    raise RuntimeError("Local similarity disabled: ranking uses rubric only.")
 
 
-def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
-    denom = (np.linalg.norm(a) * np.linalg.norm(b))
-    if denom == 0:
-        return 0.0
-    return float(np.dot(a, b) / denom)
+def cosine_sim(a, b) -> float:
+    return 0.0
 
 
 def main():
@@ -296,32 +226,8 @@ def main():
     jobs_excel = Path(os.getenv("JOBS_EXCEL", "Jobs/all_jobs.xlsx"))
     out_excel = Path(os.getenv("OUT_EXCEL", "Jobs/all_jobs_ranked.xlsx"))
 
-    # Prefer PDF resume; fallback to markdown
-    default_resume_candidates = [
-        Path("personal/resume.pdf"),
-        Path("personal/resume.md"),
-        Path("resume.pdf"),
-        Path("resume.md"),
-    ]
-    resume_path_env = os.getenv("RESUME_PATH")
-    resume_path = Path(resume_path_env) if resume_path_env else None
-    if resume_path is None:
-        for p in default_resume_candidates:
-            if p.exists():
-                resume_path = p
-                break
-    if resume_path is None:
-        raise FileNotFoundError(
-            "Resume not found. Provide RESUME_PATH or add personal/resume.pdf or personal/resume.md"
-        )
-
     if not jobs_excel.exists():
         raise FileNotFoundError(f"Jobs Excel not found at {jobs_excel}")
-
-    source, resume_text = load_resume_text(resume_path)
-    resume_text = normalize_text(resume_text)
-    instructions = load_rank_instructions()
-    resume_query_text = build_resume_query(resume_text, instructions)
 
     # Load jobs workbook fully into memory to allow safe deletion later
     sheets_map: Dict[str, pd.DataFrame] = pd.read_excel(jobs_excel, sheet_name=None)
@@ -353,14 +259,9 @@ def main():
             title_lc = df["title"].astype(str).str.lower()
             seniority_pat = "|".join(map(re.escape, SENIORITY_KEYWORDS))
             df = df[~title_lc.str.contains(seniority_pat, na=False)]
-        texts = [row_to_text(r) for _, r in df.iterrows()]
-        # Use only local ranking (TF-IDF or Jaccard); AI removed
-        scores, method_used = rank_with_local(resume_query_text, texts)
-
-        out = df.copy()
-        out.insert(0, "similarity_score", scores)
-        out = out.sort_values(by="similarity_score", ascending=False)
-        return out, method_used
+        # Rank using rubric scoring
+        out = build_ranking_ai_sheet(df)
+        return out, "rubric"
 
     # Build an All dataframe from input (prefer the input 'All' if present)
     if "All" in sheet_order:
@@ -391,7 +292,7 @@ def main():
     # Report summary
     method_summary = ", ".join(f"{k}:{v}" for k, v in methods_used.items())
     print(
-        f"Ranked workbook '{jobs_excel.name}' with methods per sheet [{method_summary}] (no AI). Resume source: {source}.\n"
+        f"Ranked workbook '{jobs_excel.name}' with methods per sheet [{method_summary}] (resume not used).\n"
         f"Wrote {out_excel}"
     )
 
