@@ -19,7 +19,6 @@ CITIES = {
     "New York": "New York, NY",
     "Philadelphia": "Philadelphia, PA",
     "Chicago": "Chicago, IL",
-    # Added from requested list
     "Cleveland": "Cleveland, OH",
     "Pittsburgh": "Pittsburgh, PA",
     "Columbus": "Columbus, OH",
@@ -30,7 +29,7 @@ CITIES = {
 }
 
 # Common scrape parameters
-RESULTS_WANTED = 20
+RESULTS_WANTED = 50
 HOURS_OLD = 24
 JOB_TYPE = "fulltime"  # or None
 COUNTRY_INDEED = "USA"
@@ -47,6 +46,12 @@ LINKEDIN_JOB_LEVEL_PARAM = [
 # Post-merge filter: keep only these job levels if column exists
 JOB_LEVEL_FILTER = {"entry level", "associate", "mid-senior level"}
 
+# Exclusions: drop jobs matching these types/keywords after scraping
+# Remove internships entirely by default
+EXCLUDE_JOB_TYPES = {"internship"}
+# Also drop titles containing these substrings (case-insensitive)
+EXCLUDE_TITLE_SUBSTRINGS = {"intern"}
+
 # Optional column slimming: set to a list to keep only these columns, or None to keep all
 DESIRED_COLUMNS = [
     "id",
@@ -56,14 +61,9 @@ DESIRED_COLUMNS = [
     "title",
     "company",
     "location",
-    "date_posted",
     "job_type",
-    "is_remote",
     "job_level",
-    "job_function",
     "description",
-    "company_industry",
-    "company_url",
 ]
 
 # Queries for LinkedIn and Indeed

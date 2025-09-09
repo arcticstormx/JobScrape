@@ -79,6 +79,20 @@ def main() -> None:
         if keep:
             jobs = jobs[keep]
 
+    # Exclude unwanted job types (e.g., internships) and title keywords
+    try:
+        if hasattr(config, "EXCLUDE_JOB_TYPES") and "job_type" in jobs.columns and config.EXCLUDE_JOB_TYPES:
+            jt = jobs["job_type"].astype(str).str.lower()
+            drop_types = {t.lower() for t in config.EXCLUDE_JOB_TYPES}
+            jobs = jobs[~jt.isin(drop_types)]
+        if hasattr(config, "EXCLUDE_TITLE_SUBSTRINGS") and "title" in jobs.columns and config.EXCLUDE_TITLE_SUBSTRINGS:
+            pat = "|".join(map(re.escape, config.EXCLUDE_TITLE_SUBSTRINGS))
+            title_lc = jobs["title"].astype(str).str.lower()
+            jobs = jobs[~title_lc.str.contains(pat, na=False)]
+    except Exception:
+        # Best-effort filtering; ignore errors to avoid breaking scrape
+        pass
+
     print(f"{city}: Combined total {len(jobs)} jobs after filters")
     print(jobs.head())
 
