@@ -128,7 +128,7 @@ PREFERRED_LOCATIONS = [
     "d.c.",
     "dc",
 ]
-# FLORIDA_LOCATIONS = ["florida", "miami", "tampa", "orlando"]
+FLORIDA_LOCATIONS = ["florida", "miami", "tampa", "orlando"]
 
 SENIORITY_KEYWORDS = ["senior", "vp", "director", "principal", "lead"]
 
@@ -170,9 +170,9 @@ def score_job_posting(title: str, company: str, location: str, description: str)
         score -= 5
         breakdown.append("-5 Seniority Penalty")
 
-    # if any(loc in location_lc for loc in FLORIDA_LOCATIONS):
-    #     score -= 2
-    #     breakdown.append("-2 Florida Penalty")
+    if any(loc in location_lc for loc in FLORIDA_LOCATIONS):
+        score -= 2
+        breakdown.append("-2 Florida Penalty")
 
     top_pick = score >= 9
     return score, breakdown, top_pick
