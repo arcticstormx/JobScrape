@@ -14,18 +14,18 @@ OUTPUT_DIR = "Jobs"
 # Cities to scrape: {Display Name: Location String}
 # Order matters for Excel sheet ordering.
 CITIES = {
-    "Boston": "Boston, MA",
-    "Washington DC": "Washington, DC",
-    "New York": "New York, NY",
+    # "Boston": "Boston, MA",
+    # "Washington DC": "Washington, DC",
+    # "New York": "New York, NY",
     "Philadelphia": "Philadelphia, PA",
     "Chicago": "Chicago, IL",
     "Cleveland": "Cleveland, OH",
-    "Pittsburgh": "Pittsburgh, PA",
-    "Columbus": "Columbus, OH",
-    "Milwaukee": "Milwaukee, WI",
-    "Denver": "Denver, CO",
-    "Portland": "Portland, OR",
-    "Seattle": "Seattle, WA",
+    # "Pittsburgh": "Pittsburgh, PA",
+    # "Columbus": "Columbus, OH",
+    # "Milwaukee": "Milwaukee, WI",
+    # "Denver": "Denver, CO",
+    # "Portland": "Portland, OR",
+    # "Seattle": "Seattle, WA",
 }
 
 # Common scrape parameters

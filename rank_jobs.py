@@ -52,7 +52,7 @@ def build_resume_query(resume_text: str, instructions: Optional[str]) -> str:
 
 
 # -------------------------
-# Rule-based Rubric Scoring (Ranking AI)
+# Rule-based Rubric Scoring (Ranking)
 # -------------------------
 
 TOP_PROP_FIRMS = [
@@ -171,10 +171,10 @@ def score_job_posting(title: str, company: str, location: str, description: str)
     return score, breakdown, top_pick
 
 
-def build_ranking_ai_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
+def build_ranking_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
     """Return a DataFrame scored by the rubric, sorted by ai_score desc.
 
-    Adds columns: ai_score (int), ai_top_pick (bool), ai_breakdown (str)
+    Adds columns: score (int), top_pick (bool), score_breakdown (str)
     """
     if all_df.empty:
         return all_df.copy()
@@ -196,19 +196,39 @@ def build_ranking_ai_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
 
     out = all_df.copy()
     scores, top_picks, breakdowns = zip(*rows) if rows else ([], [], [])
-    out.insert(0, "ai_score", list(scores))
-    out.insert(1, "ai_top_pick", list(top_picks))
-    out.insert(2, "ai_breakdown", list(breakdowns))
-    out = out.sort_values(by=["ai_score"], ascending=False)
+    out.insert(0, "score", list(scores))
+    out.insert(1, "is_top_pick", list(top_picks))
+    out.insert(2, "score_breakdown", list(breakdowns))
+    out = out.sort_values(by=["score"], ascending=False)
+
+    # Optional column ordering for Excel output
+    env = os.getenv("RANK_COLUMNS")
+    if env:
+        desired = [c.strip() for c in env.split(",") if c.strip()]
+    else:
+        desired = [
+            "score",
+            "score_breakdown",
+            "company",
+            "title",
+            "location",
+            "job_url",
+            "date_posted",
+            "description",
+            "is_top_pick",
+        ]
+    ordered = [c for c in desired if c in out.columns]
+    rest = [c for c in out.columns if c not in ordered]
+    out = out.loc[:, ordered + rest]
     return out
 
 
 def _highlight_top_picks(writer, sheet_name: str, df: pd.DataFrame) -> None:
-    """Highlight rows where ai_top_pick is True in light green.
+    """Highlight rows where is_top_pick is True in light green.
 
     Applies styling directly to the openpyxl worksheet via the pandas ExcelWriter.
     """
-    if "ai_top_pick" not in df.columns:
+    if "is_top_pick" not in df.columns:
         return
     try:
         ws = writer.sheets[sheet_name]
@@ -217,7 +237,7 @@ def _highlight_top_picks(writer, sheet_name: str, df: pd.DataFrame) -> None:
     fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
     ncols = len(df.columns)
     # Iterate DataFrame rows; header is row 1, data starts at row 2
-    for i, is_top in enumerate(df["ai_top_pick"].tolist(), start=2):
+    for i, is_top in enumerate(df["is_top_pick"].tolist(), start=2):
         if bool(is_top):
             for col_idx in range(1, ncols + 1):
                 ws.cell(row=i, column=col_idx).fill = fill
@@ -281,7 +301,7 @@ def main():
             seniority_pat = "|".join(map(re.escape, SENIORITY_KEYWORDS))
             df = df[~title_lc.str.contains(seniority_pat, na=False)]
         # Rank using rubric scoring
-        out = build_ranking_ai_sheet(df)
+        out = build_ranking_sheet(df)
         return out, "rubric"
 
     # Build an All dataframe from input (prefer the input 'All' if present)
@@ -293,10 +313,11 @@ def main():
     # Rank each sheet independently and write to output with same sheet names
     methods_used: Dict[str, str] = {}
     with pd.ExcelWriter(out_excel) as writer:
-        # First, add the rule-based 'Ranking AI' sheet based on all jobs
-        ranking_ai_df = build_ranking_ai_sheet(input_all_df)
-        ranking_ai_df.to_excel(writer, sheet_name="Ranking AI", index=False)
-        methods_used["Ranking AI"] = "rubric"
+        # First, add the rule-based 'Ranking' sheet based on all jobs
+        ranking_ai_df = build_ranking_sheet(input_all_df)
+        ranking_ai_df.to_excel(writer, sheet_name="Ranking", index=False)
+        _highlight_top_picks(writer, "Ranking", ranking_ai_df)
+        methods_used["Ranking"] = "rubric"
 
         # Ensure 'All' (if exists) is written first to mimic original ordering
         ordered = (
@@ -309,6 +330,7 @@ def main():
             ranked_df, method = rank_df(df_sheet)
             methods_used[name] = method
             ranked_df.to_excel(writer, sheet_name=name, index=False)
+            _highlight_top_picks(writer, name, ranked_df)
 
     # Report summary
     method_summary = ", ".join(f"{k}:{v}" for k, v in methods_used.items())

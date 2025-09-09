@@ -1,0 +1,331 @@
+1	import os
+2	import re
+3	from pathlib import Path
+4	from typing import List, Tuple, Optional, Dict
+5	
+6	import pandas as pd
+7	from openpyxl.styles import PatternFill
+8	
+9	
+10	def read_text_file(path: Path) -> str:
+11	    return path.read_text(encoding="utf-8", errors="ignore")
+12	
+13	
+14	def read_pdf_text(path: Path) -> str:
+15	    try:
+16	        from pypdf import PdfReader  # type: ignore
+17	    except Exception as e:
+18	        raise RuntimeError(
+19	            "pypdf is required to read PDF resume. Please add it to requirements.txt"
+20	        ) from e
+21	    reader = PdfReader(str(path))
+22	    parts: List[str] = []
+23	    for page in reader.pages:
+24	        try:
+25	            parts.append(page.extract_text() or "")
+26	        except Exception:
+27	            continue
+28	    return "\n".join(parts)
+29	
+30	
+31	def load_resume_text(resume_path: Path) -> Tuple[str, str]:
+32	    """Deprecated: resume usage removed."""
+33	    return "", ""
+34	
+35	
+36	def normalize_text(s: str) -> str:
+37	    s = s.replace("\r", "\n")
+38	    s = "\n".join(line.strip() for line in s.splitlines())
+39	    # collapse multiple newlines/spaces
+40	    s = " ".join(s.split())
+41	    return s.strip()
+42	
+43	
+44	def load_rank_instructions() -> Optional[str]:
+45	    """Deprecated: similarity ranking removed; instructions no longer used."""
+46	    return None
+47	
+48	
+49	def build_resume_query(resume_text: str, instructions: Optional[str]) -> str:
+50	    """Deprecated: similarity ranking removed."""
+51	    return ""
+52	
+53	
+54	# -------------------------
+55	# Rule-based Rubric Scoring (Ranking)
+56	# -------------------------
+57	
+58	TOP_PROP_FIRMS = [
+59	    "Citadel",
+60	    "Jane Street",
+61	    "Optiver",
+62	    "IMC",
+63	    "DRW",
+64	    "Hudson River Trading",
+65	    "Jump",
+66	    "Five Rings",
+67	    "SIG",
+68	    "Flow Traders",
+69	    "Two Sigma Securities",
+70	    "Tower",
+71	    "Akuna",
+72	    "Wolverine",
+73	    "Belvedere",
+74	    "CTC",
+75	    "DV Trading",
+76	    "Virtu",
+77	    "XTX",
+78	]
+79	
+80	TITLE_KEYWORDS = [
+81	    "assistant trader",
+82	    "execution trader",
+83	    "trading assistant",
+84	    "trading operations",
+85	    "trade support",
+86	    "trading specialist",
+87	    "investment associate",
+88	    "broker dealer",
+89	]
+90	
+91	EQUITY_KEYWORDS = ["equities", "options", "etf", "stock markets", "brokerage"]
+92	
+93	# Brokerage/Client-Facing Fit (+2)
+94	BROKERAGE_CLIENT_KEYWORDS = [
+95	    "brokerage",
+96	    "broker-dealer",
+97	    "broker dealer",
+98	    "client service",
+99	    "corporate actions",
+100	    "trade support",
+101	    "trading operations",
+102	    "active trader",
+103	]
+104	
+105	TRADING_DESK_KEYWORDS = ["trading desk"]
+106	
+107	LICENSE_KEYWORDS = ["series 7", "series 63"]
+108	
+109	PREFERRED_LOCATIONS = [
+110	    "new york",
+111	    "nyc",
+112	    "chicago",
+113	    "boston",
+114	    "washington dc",
+115	    "d.c.",
+116	    "dc",
+117	]
+118	FLORIDA_LOCATIONS = ["florida", "miami", "tampa", "orlando"]
+119	
+120	SENIORITY_KEYWORDS = ["senior", "vp", "director", "principal", "lead"]
+121	
+122	
+123	def score_job_posting(title: str, company: str, location: str, description: str):
+124	    score = 0
+125	    breakdown: List[str] = []
+126	
+127	    title_lc = str(title or "").lower()
+128	    company_lc = str(company or "").lower()
+129	    location_lc = str(location or "").lower()
+130	    desc_lc = str(description or "").lower()
+131	
+132	    if any(firm.lower() in company_lc for firm in TOP_PROP_FIRMS):
+133	        score += 4
+134	        breakdown.append("+4 Top Prop Firm")
+135	
+136	    if any(keyword in title_lc for keyword in TITLE_KEYWORDS):
+137	        score += 3
+138	        breakdown.append("+3 Title Match")
+139	
+140	    if any(keyword in desc_lc for keyword in EQUITY_KEYWORDS):
+141	        score += 2
+142	        breakdown.append("+2 Equities/Markets Focus")
+143	
+144	    if any(keyword in desc_lc for keyword in TRADING_DESK_KEYWORDS):
+145	        score += 2
+146	        breakdown.append("+2 Trading Desk")
+147	
+148	    # Brokerage/Client-Facing Fit (+2) — check title or description
+149	    if any(kw in title_lc or kw in desc_lc for kw in BROKERAGE_CLIENT_KEYWORDS):
+150	        score += 2
+151	        breakdown.append("+2 Brokerage/Client-Facing Fit")
+152	
+153	    if any(keyword in desc_lc for keyword in LICENSE_KEYWORDS):
+154	        score += 1
+155	        breakdown.append("+1 Series License")
+156	
+157	    if any(loc in location_lc for loc in PREFERRED_LOCATIONS):
+158	        score += 1
+159	        breakdown.append("+1 Preferred Location")
+160	
+161	    if any(keyword in title_lc for keyword in SENIORITY_KEYWORDS):
+162	        score -= 5
+163	        breakdown.append("-5 Seniority Penalty")
+164	
+165	    if any(loc in location_lc for loc in FLORIDA_LOCATIONS):
+166	        score -= 1
+167	        breakdown.append("-1 Florida Penalty")
+168	
+169	    # New threshold: Top Pick at >= 10 (max now 15)
+170	    top_pick = score >= 10
+171	    return score, breakdown, top_pick
+172	
+173	
+174	def build_ranking_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
+175	    """Return a DataFrame scored by the rubric, sorted by ai_score desc.
+176	
+177	    Adds columns: ai_score (int), ai_top_pick (bool), score_breakdown (str)
+178	    """
+179	    if all_df.empty:
+180	        return all_df.copy()
+181	
+182	    # Remove postings that would incur a seniority penalty entirely
+183	    if "title" in all_df.columns:
+184	        title_lc = all_df["title"].astype(str).str.lower()
+185	        seniority_pat = "|".join(map(re.escape, SENIORITY_KEYWORDS))
+186	        all_df = all_df[~title_lc.str.contains(seniority_pat, na=False)]
+187	
+188	    rows = []
+189	    for _, r in all_df.iterrows():
+190	        title = r.get("title", "")
+191	        company = r.get("company", "")
+192	        location = r.get("location", "")
+193	        desc = r.get("description", "")
+194	        score, breakdown, top_pick = score_job_posting(title, company, location, desc)
+195	        rows.append((score, top_pick, "; ".join(breakdown)))
+196	
+197	    out = all_df.copy()
+198	    scores, top_picks, breakdowns = zip(*rows) if rows else ([], [], [])
+199	    out.insert(0, "score", list(scores))
+200	    out.insert(1, "is_top_pick", list(top_picks))
+201	    out.insert(2, "score_breakdown", list(breakdowns))
+202	    out = out.sort_values(by=["score"], ascending=False)
+203	    return out
+204	
+205	
+206	def _highlight_top_picks(writer, sheet_name: str, df: pd.DataFrame) -> None:
+207	    """Highlight rows where is_top_pick is True in light green.
+208	
+209	    Applies styling directly to the openpyxl worksheet via the pandas ExcelWriter.
+210	    """
+211	    if "is_top_pick" not in df.columns:
+212	        return
+213	    try:
+214	        ws = writer.sheets[sheet_name]
+215	    except Exception:
+216	        return
+217	    fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+218	    ncols = len(df.columns)
+219	    # Iterate DataFrame rows; header is row 1, data starts at row 2
+220	    for i, is_top in enumerate(df["is_top_pick"].tolist(), start=2):
+221	        if bool(is_top):
+222	            for col_idx in range(1, ncols + 1):
+223	                ws.cell(row=i, column=col_idx).fill = fill
+224	
+225	def get_openai_client():
+226	    return None
+227	
+228	
+229	def embed_texts(client, texts: List[str], model: str) -> List[List[float]]:
+230	    raise RuntimeError("Embeddings not supported: similarity ranking removed.")
+231	
+232	
+233	def rank_with_openai(resume_text: str, texts: List[str]) -> Tuple[List[float], str]:
+234	    raise RuntimeError("OpenAI disabled: similarity ranking removed.")
+235	
+236	
+237	def rank_with_local(resume_text: str, texts: List[str]) -> Tuple[List[float], str]:
+238	    raise RuntimeError("Local similarity disabled: ranking uses rubric only.")
+239	
+240	
+241	def cosine_sim(a, b) -> float:
+242	    return 0.0
+243	
+244	
+245	def main():
+246	    # Inputs
+247	    jobs_excel = Path(os.getenv("JOBS_EXCEL", "Jobs/all_jobs.xlsx"))
+248	    out_excel = Path(os.getenv("OUT_EXCEL", "Jobs/all_jobs_ranked.xlsx"))
+249	
+250	    if not jobs_excel.exists():
+251	        raise FileNotFoundError(f"Jobs Excel not found at {jobs_excel}")
+252	
+253	    # Load jobs workbook fully into memory to allow safe deletion later
+254	    sheets_map: Dict[str, pd.DataFrame] = pd.read_excel(jobs_excel, sheet_name=None)
+255	    sheet_order = list(sheets_map.keys())
+256	    if not sheet_order:
+257	        with pd.ExcelWriter(out_excel) as writer:
+258	            pd.DataFrame().to_excel(writer, sheet_name="Empty", index=False)
+259	        print("No sheets found. Wrote Empty sheet.")
+260	        return
+261	
+262	    # Helper to convert a row to text for embedding
+263	    def row_to_text(row: pd.Series) -> str:
+264	        title = str(row.get("title", ""))
+265	        company = str(row.get("company", ""))
+266	        location = str(row.get("location", ""))
+267	        desc = str(row.get("description", ""))
+268	        if len(desc) > 4000:
+269	            desc = desc[:4000]
+270	        return normalize_text(
+271	            f"Title: {title}\nCompany: {company}\nLocation: {location}\nDescription: {desc}"
+272	        )
+273	
+274	    # Function to rank a single DataFrame
+275	    def rank_df(df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
+276	        if df.empty:
+277	            return df.copy(), "no_data"
+278	        # Remove postings that would incur a seniority penalty entirely
+279	        if "title" in df.columns:
+280	            title_lc = df["title"].astype(str).str.lower()
+281	            seniority_pat = "|".join(map(re.escape, SENIORITY_KEYWORDS))
+282	            df = df[~title_lc.str.contains(seniority_pat, na=False)]
+283	        # Rank using rubric scoring
+284	        out = build_ranking_sheet(df)
+285	        return out, "rubric"
+286	
+287	    # Build an All dataframe from input (prefer the input 'All' if present)
+288	    if "All" in sheet_order:
+289	        input_all_df = sheets_map["All"]
+290	    else:
+291	        input_all_df = pd.concat([sheets_map[s] for s in sheet_order], ignore_index=True)
+292	
+293	    # Rank each sheet independently and write to output with same sheet names
+294	    methods_used: Dict[str, str] = {}
+295	    with pd.ExcelWriter(out_excel) as writer:
+296	        # First, add the rule-based 'Ranking' sheet based on all jobs
+297	        ranking_ai_df = build_ranking_sheet(input_all_df)
+298	        ranking_ai_df.to_excel(writer, sheet_name="Ranking", index=False)
+299	        methods_used["Ranking"] = "rubric"
+300	
+301	        # Ensure 'All' (if exists) is written first to mimic original ordering
+302	        ordered = (
+303	            ["All"] + [s for s in sheet_order if s != "All"]
+304	            if "All" in sheet_order
+305	            else sheet_order
+306	        )
+307	        for name in ordered:
+308	            df_sheet = sheets_map[name]
+309	            ranked_df, method = rank_df(df_sheet)
+310	            methods_used[name] = method
+311	            ranked_df.to_excel(writer, sheet_name=name, index=False)
+312	
+313	    # Report summary
+314	    method_summary = ", ".join(f"{k}:{v}" for k, v in methods_used.items())
+315	    print(
+316	        f"Ranked workbook '{jobs_excel.name}' with methods per sheet [{method_summary}] (resume not used).\n"
+317	        f"Wrote {out_excel}"
+318	    )
+319	
+320	    # Remove the unranked source workbook so only the ranked file remains
+321	    keep_unranked = os.getenv("KEEP_UNRANKED", "").lower() in {"1", "true", "yes", "y"}
+322	    try:
+323	        if not keep_unranked and jobs_excel.exists() and jobs_excel.resolve() != out_excel.resolve():
+324	            jobs_excel.unlink(missing_ok=True)
+325	            print(f"Removed source workbook: {jobs_excel}")
+326	    except Exception as e:
+327	        print(f"Warning: could not remove source workbook {jobs_excel}: {e}")
+328	
+329	
+330	if __name__ == "__main__":
+331	    main()
