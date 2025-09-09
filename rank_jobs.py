@@ -213,9 +213,10 @@ def build_ranking_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
             "title",
             "location",
             "job_url",
-            "date_posted",
             "description",
+            "job_url_direct",
             "is_top_pick",
+            "job_level",
         ]
     ordered = [c for c in desired if c in out.columns]
     rest = [c for c in out.columns if c not in ordered]

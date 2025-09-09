@@ -63,13 +63,11 @@ EXCLUDE_TITLE_SUBSTRINGS = {
 
 # Optional column slimming: set to a list to keep only these columns, or None to keep all
 DESIRED_COLUMNS = [
-    "site",
     "job_url",
     "job_url_direct",
     "title",
     "company",
     "location",
-    "job_level",
     "description",
 ]
 
