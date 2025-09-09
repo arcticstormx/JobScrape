@@ -115,6 +115,18 @@ TITLE_KEYWORDS = [
 
 EQUITY_KEYWORDS = ["equities", "options", "etf", "stock markets", "brokerage"]
 
+# Brokerage/Client-Facing Fit (+2)
+BROKERAGE_CLIENT_KEYWORDS = [
+    "brokerage",
+    "broker-dealer",
+    "broker dealer",
+    "client service",
+    "corporate actions",
+    "trade support",
+    "trading operations",
+    "active trader",
+]
+
 TRADING_DESK_KEYWORDS = ["trading desk"]
 
 LICENSE_KEYWORDS = ["series 7", "series 63"]
@@ -158,6 +170,11 @@ def score_job_posting(title: str, company: str, location: str, description: str)
         score += 2
         breakdown.append("+2 Trading Desk")
 
+    # Brokerage/Client-Facing Fit (+2) — check title or description
+    if any(kw in title_lc or kw in desc_lc for kw in BROKERAGE_CLIENT_KEYWORDS):
+        score += 2
+        breakdown.append("+2 Brokerage/Client-Facing Fit")
+
     if any(keyword in desc_lc for keyword in LICENSE_KEYWORDS):
         score += 1
         breakdown.append("+1 Series License")
@@ -171,10 +188,11 @@ def score_job_posting(title: str, company: str, location: str, description: str)
         breakdown.append("-5 Seniority Penalty")
 
     if any(loc in location_lc for loc in FLORIDA_LOCATIONS):
-        score -= 2
-        breakdown.append("-2 Florida Penalty")
+        score -= 1
+        breakdown.append("-1 Florida Penalty")
 
-    top_pick = score >= 9
+    # New threshold: Top Pick at >= 10 (max now 15)
+    top_pick = score >= 10
     return score, breakdown, top_pick
 
 
