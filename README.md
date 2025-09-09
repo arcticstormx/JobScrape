@@ -1,12 +1,12 @@
 # JobScrape
 
-Simple, configurable job scraping for multiple cities from LinkedIn and Indeed using the JobSpy library. It saves a per‑city CSV, merges them into a single Excel workbook with one sheet per city plus an “All” sheet, and cleans up the CSVs.
+Simple, configurable job scraping for multiple cities from LinkedIn and Indeed using the JobSpy library. It saves a per-city CSV, merges them, then produces a single ranked Excel workbook and cleans up intermediates.
 
 ## Features
-- Multi‑city runs from a single command (order controlled by `config.py`).
+- Multi-city runs from a single command (order controlled by `config.py`).
 - Scrapes LinkedIn and Indeed via JobSpy.
 - Optional filters by job level (applied to LinkedIn rows) and column slimming.
-- Outputs `Jobs/all_jobs.xlsx` with sheets: `All`, then one per city.
+- Produces one ranked workbook: `Jobs/all_jobs_ranked.xlsx` with sheets: `Ranking AI` (rule-based rubric), `All`, then one per city — all ranked by the rubric. Top picks are highlighted green.
 
 ## Requirements
 - Python 3.10+
@@ -20,7 +20,9 @@ Simple, configurable job scraping for multiple cities from LinkedIn and Indeed u
    - `pip install -r requirements.txt`
 3. Run all cities:
    - `python run_all.py`
-4. Open the result at `Jobs/all_jobs.xlsx`.
+4. Rank and open the result:
+   - `python rank_jobs.py`
+   - Open `Jobs/all_jobs_ranked.xlsx` (the unranked workbook is removed by default).
 
 ## Configuration (`config.py`)
 - `OUTPUT_DIR`: Folder for outputs (default `Jobs`).
@@ -56,8 +58,8 @@ CITIES = {
   - Optionally override location: `python scrape_city.py --city "Boston" --location "Boston, MA"`
 
 - Output structure:
-  - `Jobs/all_jobs.xlsx`: First sheet `All` (all rows combined), then one sheet per city in the same order as `CITIES`.
-  - Intermediate CSVs named like `jobs_boston.csv` are automatically removed after merge by `run_all.py`.
+  - `Jobs/all_jobs_ranked.xlsx`: Sheets are `Ranking AI` (rubric overview), then `All`, then one per city, each sorted by `ai_score` and with `ai_top_pick` highlighted green.
+  - Intermediate CSVs named like `jobs_boston.csv` are automatically removed after merge by `run_all.py`. The unranked workbook is removed by `rank_jobs.py` unless `KEEP_UNRANKED=1`.
 
 ## Customizing Queries
 Edit `DEFAULT_LINKEDIN_QUERY` and `DEFAULT_INDEED_QUERY` in `config.py`. They support typical Boolean search syntax.
@@ -65,8 +67,9 @@ Edit `DEFAULT_LINKEDIN_QUERY` and `DEFAULT_INDEED_QUERY` in `config.py`. They su
 There is an optional helper `query_loader.py` that can parse queries from a Markdown file (headings `## LinkedIn` and/or `## Indeed`). It’s not wired into the scripts by default; if you prefer that workflow, adapt `scrape_city.py:get_queries()` to read from your Markdown instead of `config.py`.
 
 ## How It Works
-- `scrape_city.py` calls `jobspy.scrape_jobs` for LinkedIn and Indeed with the configured parameters, concatenates results, applies an optional LinkedIn level filter and column slimming, and writes a per‑city CSV into `Jobs/`.
-- `run_all.py` iterates cities from `config.CITIES`, runs `scrape_city.py` for each, collects the CSVs, writes `Jobs/all_jobs.xlsx` with `All` + per‑city sheets, then deletes the CSVs.
+- `scrape_city.py` calls `jobspy.scrape_jobs` for LinkedIn and Indeed with the configured parameters, concatenates results, applies filters and column slimming, and writes a per-city CSV into `Jobs/`.
+- `run_all.py` iterates cities from `config.CITIES`, runs `scrape_city.py` for each, collects the CSVs, writes an unranked `Jobs/all_jobs.xlsx`, then deletes the CSVs.
+- `rank_jobs.py` reads the workbook, ranks each sheet using the Python rubric (no resume, no AI), creates `Jobs/all_jobs_ranked.xlsx`, and removes the unranked workbook by default.
 
 ## Tips
 - Fewer filters and a larger `HOURS_OLD` window usually increase results.
@@ -89,7 +92,7 @@ There is an optional helper `query_loader.py` that can parse queries from a Mark
 - `scrape_city.py`: Scrapes a single city from LinkedIn and Indeed using JobSpy.
 - `config.py`: Central configuration for cities, queries, and filters.
 - `Jobs/`: Output directory (created automatically).
-- `personal/`: Personal notes/resume (ignored by Git; not used by scripts).
+- `personal/`: Personal notes (ignored by Git; not used by scripts).
 - `query_loader.py`: Optional helper to parse queries from a Markdown file.
 
 ## Notes
@@ -99,13 +102,13 @@ There is an optional helper `query_loader.py` that can parse queries from a Mark
 You can run the scraper on a schedule or on-demand using GitHub Actions. This repo includes a workflow:
 
 - File: `.github/workflows/scrape.yml`
-- Triggers: manual (`workflow_dispatch`) and weekday schedule at 09:00 UTC.
-- Output: uploads `Jobs/all_jobs.xlsx` as a build artifact.
+- Triggers: manual (`workflow_dispatch`) and daily schedule at 22:00 UTC.
+- Output: uploads `Jobs/all_jobs_ranked.xlsx` as a build artifact.
 
 Usage:
 - Push the repo to GitHub.
 - In the GitHub UI, go to Actions → JobScrape → Run workflow to trigger manually, or wait for the schedule.
-- Download the `all_jobs` artifact from the workflow run.
+- Download the `all_jobs_ranked` artifact from the workflow run.
 
 Customize:
 - Change the cron under `on.schedule` for different time windows.

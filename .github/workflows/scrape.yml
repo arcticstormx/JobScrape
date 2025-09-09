@@ -9,46 +9,9 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      CV_REPO: ${{ secrets.CV_REPO }}
-      CV_REPO_TOKEN: ${{ secrets.CV_REPO_TOKEN }}
-      CV_FILE_PATH: ${{ secrets.CV_FILE_PATH }}
-      CV_REPO_REF: ${{ secrets.CV_REPO_REF }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Checkout private CV repo (optional)
-        if: ${{ env.CV_REPO != '' && env.CV_REPO_TOKEN != '' }}
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.CV_REPO }}
-          token: ${{ env.CV_REPO_TOKEN }}
-          path: _cv_repo
-          # Optionally set a specific ref/branch via CV_REPO_REF secret
-          # ref: ${{ env.CV_REPO_REF }}
-
-      - name: Copy resume from CV repo (optional)
-        if: ${{ env.CV_REPO != '' && env.CV_REPO_TOKEN != '' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p personal
-          CV_FILE_PATH="${{ env.CV_FILE_PATH }}"
-          if [ -z "${CV_FILE_PATH}" ]; then
-            CV_FILE_PATH="resume.md"
-          fi
-          if [ -f "_cv_repo/${CV_FILE_PATH}" ]; then
-            # Normalize destination to personal/resume.<ext>
-            ext="${CV_FILE_PATH##*.}"
-            dest="personal/resume.${ext}"
-            cp "_cv_repo/${CV_FILE_PATH}" "$dest"
-            echo "Copied resume from private repo to $dest"
-          else
-            echo "Specified CV file not found in private repo: ${CV_FILE_PATH}" 1>&2
-            exit 1
-          fi
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -65,37 +28,9 @@ jobs:
         run: |
           python run_all.py
 
-      - name: Inject resume from secret (optional)
-        shell: bash
-        run: |
-          if [ -f personal/resume.pdf ] || [ -f personal/resume.md ]; then
-            echo "Resume already present; skipping secret injection."
-          elif [ -n "${{ secrets.RESUME_MD }}" ]; then
-            mkdir -p personal
-            printf "%s" "${{ secrets.RESUME_MD }}" > personal/resume.md
-            echo "Wrote resume.md from secret."
-          else
-            echo "No RESUME_MD secret set; using repo file if present."
-          fi
-
-      - name: Rank jobs vs CV
+      - name: Rank jobs
         run: |
           python rank_jobs.py
-
-      - name: Cleanup CV files
-        shell: bash
-        run: |
-          rm -rf _cv_repo || true
-          rm -rf personal || true
-          echo "Cleaned up CV directories."
-
-      - name: Upload Excel artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: all_jobs
-          path: Jobs/all_jobs.xlsx
-          if-no-files-found: warn
-          retention-days: 14
 
       - name: Upload Ranked Excel artifact
         uses: actions/upload-artifact@v4
