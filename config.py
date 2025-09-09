@@ -14,18 +14,18 @@ OUTPUT_DIR = "Jobs"
 # Cities to scrape: {Display Name: Location String}
 # Order matters for Excel sheet ordering.
 CITIES = {
-    # "Boston": "Boston, MA",
-    # "Washington DC": "Washington, DC",
-    # "New York": "New York, NY",
+    "Boston": "Boston, MA",
+    "Washington DC": "Washington, DC",
+    "New York": "New York, NY",
     "Philadelphia": "Philadelphia, PA",
     "Chicago": "Chicago, IL",
     "Cleveland": "Cleveland, OH",
-    # "Pittsburgh": "Pittsburgh, PA",
-    # "Columbus": "Columbus, OH",
-    # "Milwaukee": "Milwaukee, WI",
-    # "Denver": "Denver, CO",
-    # "Portland": "Portland, OR",
-    # "Seattle": "Seattle, WA",
+    "Pittsburgh": "Pittsburgh, PA",
+    "Columbus": "Columbus, OH",
+    "Milwaukee": "Milwaukee, WI",
+    "Denver": "Denver, CO",
+    "Portland": "Portland, OR",
+    "Seattle": "Seattle, WA",
 }
 
 # Common scrape parameters
@@ -63,14 +63,12 @@ EXCLUDE_TITLE_SUBSTRINGS = {
 
 # Optional column slimming: set to a list to keep only these columns, or None to keep all
 DESIRED_COLUMNS = [
-    "id",
     "site",
     "job_url",
     "job_url_direct",
     "title",
     "company",
     "location",
-    "job_type",
     "job_level",
     "description",
 ]
