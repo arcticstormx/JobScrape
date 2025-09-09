@@ -228,43 +228,16 @@ def build_ranking_ai_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 def get_openai_client():
-    try:
-        from openai import OpenAI  # type: ignore
-    except Exception as e:
-        raise RuntimeError(
-            "openai package is required. Please add it to requirements.txt"
-        ) from e
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        # No key present; return None to allow local fallback.
-        return None
-    base_url = os.getenv("OPENAI_BASE_URL")  # optional, supports Azure/other proxies
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    return client
+    # AI usage removed: keep placeholder to avoid import errors elsewhere if referenced.
+    return None
 
 
 def embed_texts(client, texts: List[str], model: str) -> List[List[float]]:
-    # OpenAI API supports batching multiple inputs in one call
-    resp = client.embeddings.create(model=model, input=texts)
-    return [d.embedding for d in resp.data]
+    raise RuntimeError("OpenAI embeddings disabled: AI usage removed from ranker.")
 
 
 def rank_with_openai(resume_text: str, texts: List[str]) -> Tuple[List[float], str]:
-    """Try to rank using OpenAI embeddings. Returns (scores, method_label).
-
-    Raises an exception if embeddings cannot be obtained (e.g., quota).
-    """
-    client = get_openai_client()
-    if client is None:
-        raise RuntimeError("OPENAI_API_KEY not set")
-    embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-    [resume_vec] = embed_texts(client, [resume_text], embed_model)
-    job_vecs = embed_texts(client, texts, embed_model)
-
-    resume_arr = np.array(resume_vec, dtype=float)
-    scores = [cosine_sim(resume_arr, np.array(v, dtype=float)) for v in job_vecs]
-    return scores, f"openai:{embed_model}"
+    raise RuntimeError("OpenAI ranking disabled: AI usage removed from ranker.")
 
 
 def rank_with_local(resume_text: str, texts: List[str]) -> Tuple[List[float], str]:
@@ -381,23 +354,8 @@ def main():
             seniority_pat = "|".join(map(re.escape, SENIORITY_KEYWORDS))
             df = df[~title_lc.str.contains(seniority_pat, na=False)]
         texts = [row_to_text(r) for _, r in df.iterrows()]
-        method_used = ""
-        try:
-            scores, method_used = rank_with_openai(resume_query_text, texts)
-        except Exception as e:
-            msg = str(e).lower()
-            if (
-                "insufficient_quota" in msg
-                or "429" in msg
-                or "rate" in msg
-                or "openai_api_key" in msg
-            ):
-                print(
-                    "OpenAI embeddings unavailable (quota/key/rate). Falling back to local ranking..."
-                )
-            else:
-                print(f"OpenAI embedding failed: {e}. Falling back to local ranking...")
-            scores, method_used = rank_with_local(resume_query_text, texts)
+        # Use only local ranking (TF-IDF or Jaccard); AI removed
+        scores, method_used = rank_with_local(resume_query_text, texts)
 
         out = df.copy()
         out.insert(0, "similarity_score", scores)
@@ -435,7 +393,7 @@ def main():
     # Report summary
     method_summary = ", ".join(f"{k}:{v}" for k, v in methods_used.items())
     print(
-        f"Ranked workbook '{jobs_excel.name}' with methods per sheet [{method_summary}]. Resume source: {source}.\n"
+        f"Ranked workbook '{jobs_excel.name}' with methods per sheet [{method_summary}] (no AI). Resume source: {source}.\n"
         f"Wrote {out_excel}"
     )
 
