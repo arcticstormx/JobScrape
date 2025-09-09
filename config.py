@@ -19,10 +19,18 @@ CITIES = {
     "New York": "New York, NY",
     "Philadelphia": "Philadelphia, PA",
     "Chicago": "Chicago, IL",
+    # Added from requested list
+    "Cleveland": "Cleveland, OH",
+    "Pittsburgh": "Pittsburgh, PA",
+    "Columbus": "Columbus, OH",
+    "Milwaukee": "Milwaukee, WI",
+    "Denver": "Denver, CO",
+    "Portland": "Portland, OR",
+    "Seattle": "Seattle, WA",
 }
 
 # Common scrape parameters
-RESULTS_WANTED = 15
+RESULTS_WANTED = 20
 HOURS_OLD = 24
 JOB_TYPE = "fulltime"  # or None
 COUNTRY_INDEED = "USA"
