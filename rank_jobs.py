@@ -119,6 +119,19 @@ FLORIDA_LOCATIONS = ["florida", "miami", "tampa", "orlando"]
 
 SENIORITY_KEYWORDS = ["senior", "vp", "director", "principal", "lead"]
 
+# High-confidence deny terms for unrelated roles to split out post-ranking
+UNRELATED_DENY_TERMS = [
+    "driver",
+    "merchandiser",
+    "warehouse",
+    "cook",
+    "janitor",
+    "teacher",
+    "nurse",
+    "accountant",
+    "payroll",
+]
+
 
 def score_job_posting(title: str, company: str, location: str, description: str):
     score = 0
@@ -235,6 +248,26 @@ def build_ranking_sheet(all_df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def split_unrelated_by_keywords(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return (unrelated_df, remaining_df) using high-confidence deny keywords.
+
+    Matches if any deny term appears in title or description (case-insensitive, word-boundary).
+    """
+    if df.empty:
+        return df.copy(), df.copy()
+
+    # Build pattern once
+    pat = r"\\b(" + "|".join(re.escape(t) for t in UNRELATED_DENY_TERMS) + r")\\b"
+
+    title_series = df["title"].astype(str).str.lower() if "title" in df.columns else pd.Series("", index=df.index)
+    desc_series = df["description"].astype(str).str.lower() if "description" in df.columns else pd.Series("", index=df.index)
+
+    hit = title_series.str.contains(pat, na=False) | desc_series.str.contains(pat, na=False)
+    unrelated = df[hit].copy()
+    remaining = df[~hit].copy()
+    return unrelated, remaining
+
+
 def _highlight_top_picks(writer, sheet_name: str, df: pd.DataFrame) -> None:
     """Highlight rows where is_top_pick is True in light green.
 
@@ -327,9 +360,17 @@ def main():
     with pd.ExcelWriter(out_excel) as writer:
         # First, add the rule-based 'Ranking' sheet based on all jobs
         ranking_ai_df = build_ranking_sheet(input_all_df)
-        ranking_ai_df.to_excel(writer, sheet_name="Ranking", index=False)
-        _highlight_top_picks(writer, "Ranking", ranking_ai_df)
+
+        # Split out clearly unrelated postings to their own sheet and remove from Ranking
+        unrelated_df, ranking_filtered_df = split_unrelated_by_keywords(ranking_ai_df)
+
+        ranking_filtered_df.to_excel(writer, sheet_name="Ranking", index=False)
+        _highlight_top_picks(writer, "Ranking", ranking_filtered_df)
         methods_used["Ranking"] = "rubric"
+
+        # Write 'Unrelated' sheet if any
+        if not unrelated_df.empty:
+            unrelated_df.to_excel(writer, sheet_name="Unrelated", index=False)
 
         # Ensure 'All' (if exists) is written first to mimic original ordering
         ordered = (
